@@ -1,5 +1,5 @@
 // === KONFIG ===
-const WEB_APP_URL = https://script.google.com/macros/s/AKfycbwX0b4cFUhK_AAzncaVQV08JuaoL8hwWtWNyqAwiy-CogeEjm4frBoSifNQPTXNEy_Nug/exec;
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwX0b4cFUhK_AAzncaVQV08JuaoL8hwWtWNyqAwiy-CogeEjm4frBoSifNQPTXNEy_Nug/exec";
 
 // === UTIL ===
 const $ = (q) => document.querySelector(q);
@@ -16,37 +16,37 @@ let deferredPrompt = null;
 function updateOnlineStatus() {
   const online = navigator.onLine;
   netBadge.textContent = online ? "Online" : "Offline";
-  netBadge.className = 'badge ' + (online ? '' : 'offline');
+  netBadge.className = "badge " + (online ? "" : "offline");
 }
-window.addEventListener('online', updateOnlineStatus);
-window.addEventListener('offline', updateOnlineStatus);
+window.addEventListener("online", updateOnlineStatus);
+window.addEventListener("offline", updateOnlineStatus);
 updateOnlineStatus();
 
 // PWA install prompt
 window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  document.getElementById("installCard").classList.remove("hidden");
+  document.getElementById("installCard")?.classList.remove("hidden");
 });
 document.getElementById("btnInstall")?.addEventListener("click", async () => {
   if (!deferredPrompt) return;
   deferredPrompt.prompt();
   const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === "accepted") document.getElementById("installCard").classList.add("hidden");
+  if (outcome === "accepted") document.getElementById("installCard")?.classList.add("hidden");
   deferredPrompt = null;
 });
 
 // Render list
 function render(items) {
   listEl.innerHTML = "";
-  if (!items.length) {
+  if (!items || !items.length) {
     listEl.innerHTML = '<li><span class="muted">Belum ada data</span></li>';
     return;
   }
-  items.forEach(it => {
+  items.forEach((it) => {
     const li = document.createElement("li");
     const left = document.createElement("div");
-    left.innerHTML = \`<strong>\${it.name}</strong><br><span class="muted">Qty: \${it.qty}</span>\`;
+    left.innerHTML = `<strong>${it.name}</strong><br><span class="muted">Qty: ${it.qty}</span>`;
     const btnDel = document.createElement("button");
     btnDel.textContent = "Del";
     btnDel.onclick = () => deleteItem(it.id);
@@ -57,39 +57,39 @@ function render(items) {
 
 // API Calls
 async function fetchItems() {
-  const res = await fetch(WEB_APP_URL);
-  const data = await res.json();
-  return data.items || [];
+  const res = await fetch(WEB_APP_URL, { method: "GET" });
+  if (!res.ok) throw new Error(`GET ${res.status}`);
+  return res.json().then((d) => d.items || []);
 }
+
 async function createItem(name, qty) {
   await fetch(WEB_APP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action:"create", name, qty:Number(qty) })
+    method: "POST",
+    headers: { "Content-Type": "text/plain" }, // penting: simple request
+    body: JSON.stringify({ action: "create", name, qty: Number(qty || 0) }),
   });
 }
+
 async function deleteItem(id) {
   await fetch(WEB_APP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action:"delete", id })
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ action: "delete", id }),
   });
   loadAndRender();
 }
 
 async function loadAndRender() {
-  const items = await fetchItems();
-  render(items);
+  try {
+    const items = await fetchItems();
+    render(items);
+  } catch (e) {
+    console.error(e);
+    // tampilkan placeholder kalau error
+    listEl.innerHTML = `<li><span class="muted">Error: ${e.message}</span></li>`;
+  }
 }
 
 btnAdd.addEventListener("click", async () => {
   if (!nameEl.value.trim()) return;
-  await createItem(nameEl.value.trim(), qtyEl.value);
-  nameEl.value = ""; qtyEl.value = "";
-  loadAndRender();
-});
-btnRefresh.addEventListener("click", loadAndRender);
-
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
-
-loadAndRender();
+  await createItem(nameEl.value.tri
