@@ -1,0 +1,2 @@
+# crud-pwa
+TrialCrud
