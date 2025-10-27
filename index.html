@@ -3,33 +3,36 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="manifest" href="manifest.json" />
-  <title>CRUD Sheets (PWA)</title>
+  <title>CRUD Sheets — PWA</title>
   <meta name="theme-color" content="#2f2f2f">
+  <link rel="manifest" href="manifest.json">
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 0; background:#f6f7fb; color:#222; }
-    header { position: sticky; top:0; background:#fff; padding:12px 16px; border-bottom:1px solid #eee; }
+    :root { --pri:#2b5cff; }
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:#f6f7fb; color:#222; }
+    header { position: sticky; top:0; background:#fff; padding:12px 16px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:8px; justify-content:space-between; }
     h1 { margin:0; font-size:18px; }
     main { max-width: 720px; margin: 16px auto; padding: 0 12px; }
-    .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:12px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+    .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:12px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
     .row { display:flex; gap:8px; }
     .row > * { flex:1; }
     input, button { padding:10px 12px; border-radius:10px; border:1px solid #ddd; font-size:14px; }
-    button { background:#2b5cff; color:#fff; border:none; cursor:pointer; }
-    button.ghost { background:#eef2ff; color:#2b5cff; }
+    button.filled { background:var(--pri); color:#fff; border:none; cursor:pointer; }
+    button.ghost { background:#eef2ff; color:var(--pri); border:none; cursor:pointer; }
     ul { list-style:none; padding:0; margin: 8px 0 0; }
     li { display:flex; align-items:center; justify-content:space-between; padding:10px 8px; border-top:1px solid #f0f0f0; }
     .muted { color:#666; font-size:12px; }
-    .actions { display:flex; gap:8px; }
-    .hidden { display:none; }
-    footer { text-align:center; color:#777; font-size:12px; padding:24px 0; }
     .badge { font-size:12px; padding:2px 8px; background:#eef7ee; color:#227a22; border-radius:999px; }
     .offline { background:#fff7e6; color:#8a5a00; }
+    .error { color:#d33; font-size:12px; white-space:pre-wrap; }
   </style>
 </head>
 <body>
   <header>
-    <h1>CRUD Sheets (PWA) <span id="netBadge" class="badge">Online</span></h1>
+    <h1>CRUD Sheets (PWA)</h1>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <span id="netBadge" class="badge">Online</span>
+      <button id="btnInstall" class="ghost" style="display:none">Install</button>
+    </div>
   </header>
   <main>
     <div class="card">
@@ -38,24 +41,17 @@
         <input id="qty" type="number" inputmode="numeric" placeholder="Qty" />
       </div>
       <div class="row" style="margin-top:8px;">
-        <button id="btnAdd">Tambah</button>
+        <button id="btnAdd" class="filled">Tambah</button>
         <button class="ghost" id="btnRefresh">Refresh</button>
       </div>
-      <p class="muted" id="hint">Data disimpan di Google Sheets melalui Apps Script.</p>
+      <p class="muted">PWA ini bisa di-install dan bekerja saat offline (penambahan data akan di-antri dulu).</p>
+      <div id="err" class="error"></div>
     </div>
 
     <div class="card">
       <strong>Daftar Item</strong>
       <ul id="list"></ul>
     </div>
-
-    <div class="card hidden" id="installCard">
-      <div class="row">
-        <div><strong>Pasang di Home Screen</strong><div class="muted">Agar seperti aplikasi native.</div></div>
-        <button id="btnInstall">Install</button>
-      </div>
-    </div>
-    <footer>© Bang Den • PWA Demo</footer>
   </main>
 
   <script src="app.js" type="module"></script>
