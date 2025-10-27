@@ -1,25 +1,32 @@
 // === KONFIG: GANTI URL ANDA DI SINI ===
 const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwX0b4cFUhK_AAzncaVQV08JuaoL8hwWtWNyqAwiy-CogeEjm4frBoSifNQPTXNEy_Nug/exec";
 
-// === UTIL ===
+// === QUERY ===
 const $ = (q) => document.querySelector(q);
 const listEl = $("#list");
 const nameEl = $("#name");
 const qtyEl = $("#qty");
+const netBadge = $("#netBadge");
 const btnAdd = $("#btnAdd");
 const btnRefresh = $("#btnRefresh");
-const netBadge = $("#netBadge");
 const errEl = $("#err");
-const btnInstall = $("#btnInstall");
+const topLoading = $("#topLoading");
+const listLoading = $("#listLoading");
 
-const CACHE_ITEMS_KEY = "items_cache_v1";
-const OUTBOX_KEY = "outbox_v1";
-
-function setErr(msg) { errEl.textContent = msg; setTimeout(()=> errEl.textContent = "", 6000); }
-function saveCache(items){ localStorage.setItem(CACHE_ITEMS_KEY, JSON.stringify(items)); }
-function loadCache(){ try{ return JSON.parse(localStorage.getItem(CACHE_ITEMS_KEY)||"[]"); }catch{ return []; } }
-function saveOutbox(arr){ localStorage.setItem(OUTBOX_KEY, JSON.stringify(arr)); }
-function loadOutbox(){ try{ return JSON.parse(localStorage.getItem(OUTBOX_KEY)||"[]"); }catch{ return []; } }
+let loadingCount = 0;
+function setLoading(on, scope = "top") {
+  loadingCount += on ? 1 : -1;
+  if (loadingCount < 0) loadingCount = 0;
+  const el = scope === "list" ? listLoading : topLoading;
+  el.innerHTML = loadingCount > 0 ? '<span class="spinner"></span>' : '';
+}
+function setListLoading(on) {
+  listLoading.innerHTML = on ? '<span class="spinner"></span>' : '';
+}
+function showError(msg) {
+  errEl.textContent = String(msg || "");
+  if (msg) setTimeout(()=> errEl.textContent = "", 5000);
+}
 
 // Network badge
 function updateOnlineStatus() {
@@ -27,58 +34,68 @@ function updateOnlineStatus() {
   netBadge.textContent = online ? "Online" : "Offline";
   netBadge.className = "badge " + (online ? "" : "offline");
 }
-addEventListener("online", async () => { updateOnlineStatus(); await processOutbox(); await loadAndRender(); });
+addEventListener("online", updateOnlineStatus);
 addEventListener("offline", updateOnlineStatus);
 updateOnlineStatus();
 
-// Install prompt (PWA)
-let deferredPrompt = null;
-addEventListener("beforeinstallprompt", (e)=>{
-  e.preventDefault();
-  deferredPrompt = e;
-  btnInstall.style.display = "inline-block";
-});
-btnInstall.addEventListener("click", async ()=>{
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  btnInstall.style.display = "none";
-  deferredPrompt = null;
-});
+// ===== Rendering =====
+function liTemplate(item) {
+  const li = document.createElement("li");
+  li.className = "enter";
+  const left = document.createElement("div");
+  const right = document.createElement("div");
+  right.className = "actions";
 
-// Render
+  left.innerHTML = `<div><strong>${escapeHtml(item.name||"")}</strong></div>
+                    <div class="muted">Qty: ${item.qty} • ${item.updated_at||""}</div>`;
+
+  const del = document.createElement("button");
+  del.className = "ghost";
+  del.textContent = "Del";
+  del.onclick = () => deleteItem(item.id);
+
+  right.append(del);
+  li.append(left, right);
+  // small next-frame to trigger CSS transition
+  requestAnimationFrame(()=> li.classList.add("show"));
+  return li;
+}
+
 function render(items) {
   listEl.innerHTML = "";
   if (!items || !items.length) {
-    listEl.innerHTML = '<li><span class="muted">Belum ada data</span></li>';
+    listEl.innerHTML = `<li class="muted" style="padding:10px 8px;">Belum ada data</li>`;
     return;
   }
-  for (const it of items) {
+  for (const it of items) listEl.append(liTemplate(it));
+}
+
+function showSkeletonList(rows=4) {
+  listEl.innerHTML = "";
+  for (let i=0;i<rows;i++){
     const li = document.createElement("li");
-    const left = document.createElement("div");
-    left.innerHTML = `<strong>${escapeHtml(it.name||"")}</strong><br><span class="muted">Qty: ${it.qty} • ${it.updated_at||""}</span>`;
-    const del = document.createElement("button");
-    del.textContent = "Del";
-    del.className = "ghost";
-    del.onclick = () => deleteItem(it.id);
-    li.append(left, del);
+    li.className = "loadingRow";
+    li.innerHTML = `<div class="skeleton" style="width:100%;">
+                      <div class="s1"></div><div class="s2"></div>
+                    </div>`;
     listEl.append(li);
   }
 }
+
 function escapeHtml(s){ return s?.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) || ""; }
 
-// === API ===
+// ===== API =====
 async function fetchItems() {
   const res = await fetch(WEB_APP_URL, { method: "GET" });
   if (!res.ok) throw new Error(`GET ${res.status}`);
   const data = await res.json();
   return data.items || [];
 }
-async function postJson(bodyObj) {
+async function postSimple(body) {
   const res = await fetch(WEB_APP_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify(bodyObj)
+    body: JSON.stringify(body)
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`POST ${res.status}`);
@@ -87,68 +104,83 @@ async function postJson(bodyObj) {
   return j;
 }
 
-// === Offline queue ===
-async function processOutbox(){
-  if (!navigator.onLine) return;
-  const outbox = loadOutbox();
-  if (!outbox.length) return;
-  const remaining = [];
-  for (const job of outbox) {
-    try { await postJson(job); }
-    catch(e){ remaining.push(job); }
-  }
-  saveOutbox(remaining);
-}
+// ===== Data flow =====
+let currentItems = []; // cache dalam memori untuk optimistic updates
 
-async function createItem(name, qty){
-  const job = { action:"create", name, qty:Number(qty||0) };
-  if (!navigator.onLine) {
-    const box = loadOutbox(); box.push(job); saveOutbox(box);
-    setErr("Offline: disimpan di antrian, akan dikirim saat online.");
-    return;
-  }
-  await postJson(job);
-}
-async function deleteItem(id){
-  const job = { action:"delete", id };
-  if (!navigator.onLine) {
-    const box = loadOutbox(); box.push(job); saveOutbox(box);
-    setErr("Offline: penghapusan diantri, akan diproses saat online.");
-    return;
-  }
-  await postJson(job);
-  await loadAndRender();
-}
-
-// === Load ===
-async function loadAndRender(){
-  try{
+async function loadAndRender() {
+  setListLoading(true);
+  showSkeletonList();
+  try {
     const items = await fetchItems();
+    currentItems = items;
     render(items);
-    saveCache(items);
-  }catch(e){
-    // fallback cache saat gagal (mis. offline)
-    render(loadCache());
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    setListLoading(false);
   }
 }
 
-// === UI events ===
-btnAdd.addEventListener("click", async ()=>{
+async function createItemOptimistic(name, qty) {
+  // 1) Optimistic: sisipkan dummy row
+  const tempId = `temp-${Date.now()}`;
+  const optimistic = { id: tempId, name, qty: Number(qty||0), updated_at: "…" };
+  currentItems = [optimistic, ...currentItems];
+  render(currentItems);
+
+  // 2) Kirim ke server
+  setLoading(true);
+  try {
+    const resp = await postSimple({ action:"create", name, qty:Number(qty||0) });
+    // 3) Replace temp row dengan data “asli”
+    currentItems = currentItems.map(x => x.id === tempId ? {...x, id: resp.id, updated_at: new Date().toISOString()} : x);
+    render(currentItems);
+  } catch (e) {
+    // Rollback
+    currentItems = currentItems.filter(x => x.id !== tempId);
+    render(currentItems);
+    showError(e.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deleteItem(id) {
+  // Optimistic remove
+  const backup = currentItems.slice();
+  currentItems = currentItems.filter(x => x.id !== id);
+  render(currentItems);
+
+  setLoading(true);
+  try {
+    await postSimple({ action:"delete", id });
+    // sukses: biarkan hasil render optimistic
+  } catch (e) {
+    // rollback
+    currentItems = backup;
+    render(currentItems);
+    showError(e.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ===== UI events =====
+btnAdd.addEventListener("click", async () => {
   const name = nameEl.value.trim();
   if (!name) { nameEl.focus(); return; }
-  try{
-    await createItem(name, qtyEl.value);
+  btnAdd.disabled = true;
+  try {
+    await createItemOptimistic(name, qtyEl.value);
     nameEl.value = ""; qtyEl.value = "";
-    await processOutbox();
-    await loadAndRender();
-  }catch(e){ setErr(e.message); }
+  } finally {
+    btnAdd.disabled = false;
+  }
 });
-btnRefresh.addEventListener("click", loadAndRender);
 
-// Service worker
-if ("serviceWorker" in navigator) {
-  addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js"));
-}
+btnRefresh.addEventListener("click", () => {
+  loadAndRender();
+});
 
-// First load
+// ===== First load =====
 loadAndRender();
