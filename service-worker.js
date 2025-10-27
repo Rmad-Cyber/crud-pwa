@@ -1,5 +1,7 @@
-// PWA Service Worker dengan cache shell + network-first untuk API
-const CACHE_NAME = 'pwa-crud-full-v2';
+// ====== SERVICE WORKER ======
+// Ganti versi ini setiap kali mengupdate app.js atau index.html
+const CACHE_NAME = 'pwa-crud-full-v5';
+
 const ASSETS = [
   './',
   './index.html',
@@ -7,25 +9,45 @@ const ASSETS = [
   './manifest.json'
 ];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(ASSETS)));
-});
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+// — Install: cache shell assets —
+self.addEventListener('install', (event) => {
+  console.log('[SW] Installing new version...');
+  self.skipWaiting(); // langsung pakai versi baru
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
 });
 
-self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  // Cache-first untuk asset statis lokal
+// — Activate: hapus cache lama + klaim kontrol —
+self.addEventListener('activate', (event) => {
+  console.log('[SW] Activated & cleaning old caches...');
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      )
+    )
+  );
+  clients.claim(); // kontrol halaman tanpa reload manual
+});
+
+// — Fetch handler —
+// Aset lokal = cache-first
+// API remote (Apps Script) = network-first
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Aset lokal
   if (url.origin === location.origin && ASSETS.includes(url.pathname.replace(/.*\//,''))) {
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+    event.respondWith(
+      caches.match(req).then(res => res || fetch(req))
+    );
     return;
   }
-  // Network-first (API Google Apps Script)
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+
+  // API Remote (Apps Script)
+  event.respondWith(
+    fetch(req).catch(() => caches.match(req))
+  );
 });
