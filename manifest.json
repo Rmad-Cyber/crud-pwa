@@ -1,0 +1,9 @@
+{
+  "name": "CRUD Sheets (PWA)",
+  "short_name": "CRUD Sheets",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2f2f2f",
+  "icons": []
+}
