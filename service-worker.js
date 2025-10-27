@@ -1,5 +1,5 @@
 // PWA Service Worker dengan cache shell + network-first untuk API
-const CACHE_NAME = 'pwa-crud-full-v1';
+const CACHE_NAME = 'pwa-crud-full-v2';
 const ASSETS = [
   './',
   './index.html',
